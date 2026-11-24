@@ -13,7 +13,8 @@ class SensorPointService(BaseModuleService):
     MODULE = "sensor_point"
     ENTITY = "测点档案"
     OPERATION_TERM = "校验"
-    LIST_FIELDS = ["测点编号", "所属产线", "传感器型号", "量程范围", "采样频率", "计量单位", "投运日期", "台账版本"]
+    LIST_FIELDS = ["测点编号", "所属产线", "传感器型号", "量程范围", "采样频率", "计量单位", "投运日期", "台账版本",
+                   "共享标记", "共享起始时间", "共享截止时间", "允许使用粒度"]
     REQUIRED_FIELDS = ["测点编号", "所属产线", "传感器型号"]
     STATUS_ORDER = ["草稿", "待校验", "已投运", "已停用"]
     ACTION_RULES = {"提交校验": "待校验", "确认投运": "已投运", "标记停用": "已停用"}
@@ -94,3 +95,34 @@ class SensorPointService(BaseModuleService):
             "activated_at": time.time(),
             "auto_triggers": triggers,
         }
+
+    def mark_shared(self, point_key: str, *, start: str, end: str,
+                    granularity: str, line: str, version: str) -> dict[str, Any]:
+        """在测点台账标出共享起止时间与允许使用粒度（受控共享授权回写）。"""
+        target = next((row for row in store.rows(self.MODULE)
+                       if row.get("测点编号") == point_key), None)
+        if target is None:
+            # 授权先于台账登记到达时，落一条占位档案，保证共享标记可被列表与对账看到
+            target = {
+                "id": max((int(r.get("id", 0)) for r in store.rows(self.MODULE)), default=0) + 1,
+                "测点编号": point_key,
+                "所属产线": line,
+                "传感器型号": "",
+                "status": "已投运",
+                "pending": False,
+                "abnormal": False,
+            }
+            store.rows(self.MODULE).append(target)
+        target["共享标记"] = f"受控共享（{line}）"
+        target["共享起始时间"] = start
+        target["共享截止时间"] = end
+        target["允许使用粒度"] = granularity
+        target["共享授权版本"] = version
+        # 台账留痕：共享标记变更写入测点台账日志文件
+        self._write_jsonl(
+            self._data_dir("sensor_points") / "point_ledger.jsonl",
+            [{"action": "mark_shared", "point_key": point_key, "line": line,
+              "shared_start": start, "shared_end": end,
+              "granularity": granularity, "version": version, "at": time.time()}],
+        )
+        return {"point_key": point_key, "shared": True, "version": version}

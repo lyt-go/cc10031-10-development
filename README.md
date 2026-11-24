@@ -11,7 +11,7 @@
 .
 ├── frontend/                 Vue 3 + Vite + TypeScript 前端
 │   ├── src/views/WorkbenchView.vue|tsx  全部模块共享工作台
-│   ├── src/data/modules.ts              18个业务模块配置
+│   ├── src/data/modules.ts              19个业务模块配置
 │   ├── src/api/              统一请求封装
 │   └── vite.config.ts        dev server 配置（open: false）
 ├── backend/                  FastAPI（Python） 后端
@@ -68,6 +68,22 @@ npm run dev
 | 序列导出 | `series_export` | 导出任务 | 导出编号、测点范围、时间范围 |
 | 时序质量 | `series_quality` | 质量报告 | 报告编号、测点编号、统计窗口 |
 | 序列快照 | `series_snapshot` | 版本快照 | 快照编号、口径说明、测点范围 |
+| 共享授权 | `shared_grant` | 共享授权 | 授权编号、共享起止时间、允许使用粒度 |
+
+### 共享测点受控交付接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/shared-grants` | 登记共享授权并回写测点台账（起止时间 + 允许粒度） |
+| POST | `/api/shared-grants/{id}/correct` | 授权范围更正，旧版本置「已更正」留痕 |
+| POST | `/api/raw-observations` | 登记带实际采样时间的原始观测 |
+| POST | `/api/controlled-exports` | 创建受控导出请求（先请求、发送时按现时授权核对） |
+| POST | `/api/controlled-exports/{id}/claim` | 领取未交付分片，逐窗登记交付凭据，可中断续领 |
+| GET | `/api/controlled-exports/{id}/receipts` | 查询交付凭据供合作方对账 |
+| GET | `/api/controlled-exports/{id}/reconcile` | 按原始观测重算校验值核对每窗凭据 |
+
+受控交付只交付「请求范围 ∩ 现时授权范围」内、且存在可核对原始观测的窗口；授权之外不产生
+任何观测或可反推的汇总值。导出粒度细于授权允许粒度时拒绝交付。
 
 ## 约定
 
